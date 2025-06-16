@@ -32,7 +32,8 @@ jobs:
             make
             pkg-config
             mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-autoconf-archive
+            autoconf-archive
+          cache: true
 
       - name: Configure and build (MSYS2 MinGW 64-bit)
         shell: msys2 {0}
