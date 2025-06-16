@@ -1,52 +1,55 @@
-name: Build WinHTTrack for Windows
+name: Windows Autocompile
 
 on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
-    name: Build WinHTTrack GUI (.exe)
-
     steps:
-    - name: 📥 Checkout HTTrack Source
-      uses: actions/checkout@v3
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-    - name: 📥 Download Prebuilt zlib (x64)
-      run: |
-        git clone https://github.com/OSDVF/zlib-win-x64.git zlib
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-gtk3
+            autoconf
+            automake
+            libtool
+            make
+            pkg-config
+            mingw-w64-x86_64-pkg-config
 
-    - name: 🔁 Copy core source files to src_win
-      run: |
-        xcopy src\*.* src_win\ /S /Y
+      - name: Configure and build (MSYS2 MinGW 64-bit)
+        shell: msys2 {0}
+        env:
+          MSYSTEM: MINGW64
+        run: |
+          autoreconf -fi
+          ./configure --host=x86_64-w64-mingw32 --enable-gtk
+          make -j$(nproc)
 
-    - name: 🧰 Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.3.1
-
-    - name: 🛠️ Build WinHTTrack with MSBuild
-      run: |
-        msbuild src_win\WinHTTrack.dsp /p:Configuration=Release /p:Platform=x64 /t:Build
-      env:
-        INCLUDE: ${{ github.workspace }}\zlib\include
-        LIB: ${{ github.workspace }}\zlib\lib
-
-    - name: 📦 Package WinHTTrack
-      run: |
-        mkdir dist
-        copy src_win\Release\WinHTTrack.exe dist\
-        copy zlib\bin\zlib1.dll dist\
-        if exist lang (xcopy lang dist\lang\ /E /I /Y)
-        if exist lang.def (copy lang.def dist\)
-        
-        echo =========================
-        echo 📁 Contents of dist folder:
-        echo =========================
-        dir dist /S /B
-
-        powershell Compress-Archive -Path dist\* -DestinationPath WinHTTrack-Windows.zip
-
-    - name: 📤 Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: WinHTTrack-Build
-        path: WinHTTrack-Windows.zip
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            src/*.exe
+            src/*.dll
+            src/*.bat
+            html/
+            lang/
+            templates/
