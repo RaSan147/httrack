@@ -1,0 +1,52 @@
+name: Build WinHTTrack for Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    name: Build WinHTTrack GUI (.exe)
+
+    steps:
+    - name: 📥 Checkout HTTrack Source
+      uses: actions/checkout@v3
+
+    - name: 📥 Download Prebuilt zlib (x64)
+      run: |
+        git clone https://github.com/OSDVF/zlib-win-x64.git zlib
+
+    - name: 🔁 Copy core source files to src_win
+      run: |
+        xcopy src\*.* src_win\ /S /Y
+
+    - name: 🧰 Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3.1
+
+    - name: 🛠️ Build WinHTTrack with MSBuild
+      run: |
+        msbuild src_win\WinHTTrack.dsp /p:Configuration=Release /p:Platform=x64 /t:Build
+      env:
+        INCLUDE: ${{ github.workspace }}\zlib\include
+        LIB: ${{ github.workspace }}\zlib\lib
+
+    - name: 📦 Package WinHTTrack
+      run: |
+        mkdir dist
+        copy src_win\Release\WinHTTrack.exe dist\
+        copy zlib\bin\zlib1.dll dist\
+        if exist lang (xcopy lang dist\lang\ /E /I /Y)
+        if exist lang.def (copy lang.def dist\)
+        
+        echo =========================
+        echo 📁 Contents of dist folder:
+        echo =========================
+        dir dist /S /B
+
+        powershell Compress-Archive -Path dist\* -DestinationPath WinHTTrack-Windows.zip
+
+    - name: 📤 Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WinHTTrack-Build
+        path: WinHTTrack-Windows.zip
